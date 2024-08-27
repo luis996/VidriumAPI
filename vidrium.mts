@@ -1,5 +1,6 @@
 import { ChildProcess } from "node:child_process";
 import EventEmitter from "node:events";
+import { writeFile } from "node:fs/promises";
 
 export enum ParentAPIEvents {
     LOG = 'log',
@@ -33,6 +34,11 @@ export class ParentExecAPI extends EventEmitter {
                             childProcess.stdin?.write(`sendResource:${Buffer.from(JSON.stringify({name: name, value: value}), "utf8").toString("base64")}`);
                         }
                     }, });
+                    break;
+                case "questionForward":
+                    this.emit(ParentAPIEvents.QUESTION, { content, respond: async (answer) => {
+                        childProcess.stdin?.write(`questionForwardResponse:${Buffer.from(JSON.stringify(answer), "utf8").toString("base64")}`);
+                    },});
                     break;
             }
         });
@@ -126,11 +132,12 @@ class ChildAPI {
 }
 
 class ChildExecAPI {
+    // Estas se ejecutarán desde el proceso CHILD.
     public log(c: any) {
         process.stdout.write(`log:${Buffer.from(JSON.stringify(c), "utf8").toString("base64")}`, "utf8");
     }
 
-    public getResource(r: string) {
+    public async getResource(r: string) {
         return new Promise((resolve, reject) => {
             process.stdout.write(`getResource:${Buffer.from(JSON.stringify(r), "utf8").toString("base64")}`, "utf8");
             process.stdin.once("data", (d: any) => {
@@ -142,6 +149,22 @@ class ChildExecAPI {
                 }
             });
         });
+    }
+
+    public async questionForward(q: string) {
+        return (new Promise((resolve) => {
+            process.stdout.write(`questionForward:${Buffer.from(JSON.stringify(q), "utf8").toString("base64")}`, "utf8");
+            // childProcess.stdin?.write(`questionForwardResponse:${Buffer.from(JSON.stringify(answer), "utf8").toString("base64")}`);
+            process.stdin.once("data", (d: any) => {
+                const x = d.toString().split(":");
+                const opCode = x[0];
+                if (opCode == "questionForwardResponse") {
+                    const answer = JSON.parse(Buffer.from(x[1], "base64").toString("utf8"));
+                    resolve(answer);
+                }
+
+            })
+        }));
     }
 
     public exit() { process.exit(); }
