@@ -166,10 +166,10 @@ class VidriumResourceRequest {
     send(id, value) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
-            if (this.properties[0] == ParentExecAPI) {
-                (_a = this.properties[1].stdin) === null || _a === void 0 ? void 0 : _a.write(`sendResource:${Buffer.from(JSON.stringify({ name: name, value: value }), "utf8").toString("base64")}`);
+            if (this.properties[0] instanceof ParentExecAPI) {
+                (_a = this.properties[1].stdin) === null || _a === void 0 ? void 0 : _a.write(`sendResource:${Buffer.from(JSON.stringify({ id: id, value: value }), "utf8").toString("base64")}`);
             }
-            if (this.properties[0] == ParentAPI) {
+            if (this.properties[0] instanceof ParentAPI) {
                 this.properties[1].send(["sendResource", Buffer.from(id, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
             }
         });
@@ -183,17 +183,17 @@ class VidriumQuestion {
     respond(response) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
-            if (this.properties[0] == ParentExecAPI) {
+            if (this.properties[0] instanceof ParentExecAPI) {
                 (_a = this.properties[1].stdin) === null || _a === void 0 ? void 0 : _a.write(`questionForwardResponse:${Buffer.from(JSON.stringify(response), "utf8").toString("base64")}`);
             }
-            if (this.properties[0] == ParentAPI) {
+            if (this.properties[0] instanceof ParentAPI) {
                 this.properties[1].send(["questionForwardResponse", response]);
             }
         });
     }
 }
 export default {
-    version: "1.2.2",
+    version: "1.3.0",
     childAPI: new ChildAPI(),
     childExecAPI: new ChildExecAPI(),
 };

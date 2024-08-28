@@ -169,10 +169,10 @@ class VidriumResourceRequest {
         this.properties = properties;
     }
     public async send(id: string, value: any) {
-        if(this.properties[0] == ParentExecAPI) {
-            this.properties[1].stdin?.write(`sendResource:${Buffer.from(JSON.stringify({name: name, value: value}), "utf8").toString("base64")}`);
+        if(this.properties[0] instanceof ParentExecAPI) {
+            this.properties[1].stdin?.write(`sendResource:${Buffer.from(JSON.stringify({id: id, value: value}), "utf8").toString("base64")}`);
         }
-        if (this.properties[0] == ParentAPI) {
+        if (this.properties[0] instanceof ParentAPI) {
             this.properties[1].send(["sendResource", Buffer.from(id, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
         }
     }
@@ -186,17 +186,17 @@ class VidriumQuestion {
         this.properties = properties
     }
     public async respond(response: string) {
-        if(this.properties[0] == ParentExecAPI) {
+        if(this.properties[0] instanceof ParentExecAPI) {
             this.properties[1].stdin?.write(`questionForwardResponse:${Buffer.from(JSON.stringify(response), "utf8").toString("base64")}`);
         }
-        if(this.properties[0] == ParentAPI) {
+        if(this.properties[0] instanceof ParentAPI) {
             this.properties[1].send(["questionForwardResponse", response]);
         }
     }
 }
 
 export default {
-    version: "1.2.2",
+    version: "1.3.0",
     childAPI: new ChildAPI(),
     childExecAPI: new ChildExecAPI(),
 }
