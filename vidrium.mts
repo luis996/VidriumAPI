@@ -1,6 +1,5 @@
 import { ChildProcess } from "node:child_process";
 import EventEmitter from "node:events";
-import { writeFile } from "node:fs/promises";
 
 export enum ParentAPIEvents {
     LOG = 'log',
@@ -10,9 +9,9 @@ export enum ParentAPIEvents {
 
 export interface ParentAPIEventsMap {
     // Should contain ALL ParentApiEvents defined here.
-    ["log"]: (message: string) => void;
-    ["getResource"]: (payload: { id: string, send: (name: string, value: any) => Promise<void> }) => void;
-    ["questionForward"]: (payload: { content: string, respond: (answer: string) => Promise<void> }) => void;
+    ["log"]: (message: VidriumConsoleMessage) => void;
+    ["getResource"]: (resource: VidriumResourceRequest) => void;
+    ["questionForward"]: (question: VidriumQuestion) => void;
 }
 
 export class ParentExecAPI extends EventEmitter {
@@ -26,19 +25,13 @@ export class ParentExecAPI extends EventEmitter {
             const content = JSON.parse(Buffer.from(x[1], "base64").toString("utf8"));
             switch (opCode) {
                 case "log":
-                    this.emit(ParentAPIEvents.LOG, content);
+                    this.emit(ParentAPIEvents.LOG, new VidriumConsoleMessage(content));
                     break;
                 case "getResource":
-                    this.emit(ParentAPIEvents.RESOURCE_REQUEST, { id: content, async send(name, value) {
-                        if (name == content) {
-                            childProcess.stdin?.write(`sendResource:${Buffer.from(JSON.stringify({name: name, value: value}), "utf8").toString("base64")}`);
-                        }
-                    }, });
+                    this.emit(ParentAPIEvents.RESOURCE_REQUEST, new VidriumResourceRequest(content, [this, this.childProcess]));
                     break;
                 case "questionForward":
-                    this.emit(ParentAPIEvents.QUESTION, { content, respond: async (answer) => {
-                        childProcess.stdin?.write(`questionForwardResponse:${Buffer.from(JSON.stringify(answer), "utf8").toString("base64")}`);
-                    },});
+                    this.emit(ParentAPIEvents.QUESTION, new VidriumQuestion(content, [this, this.childProcess]));
                     break;
             }
         });
@@ -68,21 +61,13 @@ export class ParentAPI extends EventEmitter {
 
         switch (opcode) {
             case ParentAPIEvents.LOG:
-                this.emit(ParentAPIEvents.LOG, content);
+                this.emit(ParentAPIEvents.LOG, new VidriumConsoleMessage(content));
                 break;
             case ParentAPIEvents.QUESTION:
-                this.emit(ParentAPIEvents.QUESTION, {
-                    content, respond: async (answer: string) => {
-                        this.childProcess.send(["questionForwardResponse", answer]);
-                    }
-                });
+                this.emit(ParentAPIEvents.QUESTION, new VidriumQuestion(content, [this, this.childProcess]));
                 break;
             case ParentAPIEvents.RESOURCE_REQUEST:
-                this.emit(ParentAPIEvents.RESOURCE_REQUEST, {
-                    id: content, send: async (name: string, value: any) => {
-                        this.childProcess.send(["sendResource", Buffer.from(name, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
-                    }
-                });
+                this.emit(ParentAPIEvents.RESOURCE_REQUEST, new VidriumResourceRequest(content, [this, this.childProcess]));
                 break;
         }
     }
@@ -168,6 +153,46 @@ class ChildExecAPI {
     }
 
     public exit() { process.exit(); }
+}
+
+class VidriumConsoleMessage {
+    public content: any;
+    constructor(message: any) {
+        this.content = message;
+    }
+}
+class VidriumResourceRequest {
+    public id: string;
+    private properties: [any, ChildProcess];
+    constructor(resource: string, properties: [any, ChildProcess]) {
+        this.id = resource;
+        this.properties = properties;
+    }
+    public async send(id: string, value: any) {
+        if(this.properties[0] == ParentExecAPI) {
+            this.properties[1].stdin?.write(`sendResource:${Buffer.from(JSON.stringify({name: name, value: value}), "utf8").toString("base64")}`);
+        }
+        if (this.properties[0] == ParentAPI) {
+            this.properties[1].send(["sendResource", Buffer.from(id, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
+        }
+    }
+}
+
+class VidriumQuestion {
+    public content: string;
+    private properties: [any, ChildProcess];
+    constructor(content: string, properties: [any, ChildProcess]) {
+        this.content = content;
+        this.properties = properties
+    }
+    public async respond(response: string) {
+        if(this.properties[0] == ParentExecAPI) {
+            this.properties[1].stdin?.write(`questionForwardResponse:${Buffer.from(JSON.stringify(response), "utf8").toString("base64")}`);
+        }
+        if(this.properties[0] == ParentAPI) {
+            this.properties[1].send(["questionForwardResponse", response]);
+        }
+    }
 }
 
 export default {

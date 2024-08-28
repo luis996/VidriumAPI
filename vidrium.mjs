@@ -25,23 +25,13 @@ export class ParentExecAPI extends EventEmitter {
             const content = JSON.parse(Buffer.from(x[1], "base64").toString("utf8"));
             switch (opCode) {
                 case "log":
-                    this.emit(ParentAPIEvents.LOG, content);
+                    this.emit(ParentAPIEvents.LOG, new VidriumConsoleMessage(content));
                     break;
                 case "getResource":
-                    this.emit(ParentAPIEvents.RESOURCE_REQUEST, { id: content, send(name, value) {
-                            return __awaiter(this, void 0, void 0, function* () {
-                                var _a;
-                                if (name == content) {
-                                    (_a = childProcess.stdin) === null || _a === void 0 ? void 0 : _a.write(`sendResource:${Buffer.from(JSON.stringify({ name: name, value: value }), "utf8").toString("base64")}`);
-                                }
-                            });
-                        }, });
+                    this.emit(ParentAPIEvents.RESOURCE_REQUEST, new VidriumResourceRequest(content, [this, this.childProcess]));
                     break;
                 case "questionForward":
-                    this.emit(ParentAPIEvents.QUESTION, { content, respond: (answer) => __awaiter(this, void 0, void 0, function* () {
-                            var _a;
-                            (_a = childProcess.stdin) === null || _a === void 0 ? void 0 : _a.write(`questionForwardResponse:${Buffer.from(JSON.stringify(answer), "utf8").toString("base64")}`);
-                        }), });
+                    this.emit(ParentAPIEvents.QUESTION, new VidriumQuestion(content, [this, this.childProcess]));
                     break;
             }
         });
@@ -66,21 +56,13 @@ export class ParentAPI extends EventEmitter {
         const content = message[1];
         switch (opcode) {
             case ParentAPIEvents.LOG:
-                this.emit(ParentAPIEvents.LOG, content);
+                this.emit(ParentAPIEvents.LOG, new VidriumConsoleMessage(content));
                 break;
             case ParentAPIEvents.QUESTION:
-                this.emit(ParentAPIEvents.QUESTION, {
-                    content, respond: (answer) => __awaiter(this, void 0, void 0, function* () {
-                        this.childProcess.send(["questionForwardResponse", answer]);
-                    })
-                });
+                this.emit(ParentAPIEvents.QUESTION, new VidriumQuestion(content, [this, this.childProcess]));
                 break;
             case ParentAPIEvents.RESOURCE_REQUEST:
-                this.emit(ParentAPIEvents.RESOURCE_REQUEST, {
-                    id: content, send: (name, value) => __awaiter(this, void 0, void 0, function* () {
-                        this.childProcess.send(["sendResource", Buffer.from(name, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
-                    })
-                });
+                this.emit(ParentAPIEvents.RESOURCE_REQUEST, new VidriumResourceRequest(content, [this, this.childProcess]));
                 break;
         }
     }
@@ -170,6 +152,45 @@ class ChildExecAPI {
         });
     }
     exit() { process.exit(); }
+}
+class VidriumConsoleMessage {
+    constructor(message) {
+        this.content = message;
+    }
+}
+class VidriumResourceRequest {
+    constructor(resource, properties) {
+        this.id = resource;
+        this.properties = properties;
+    }
+    send(id, value) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            if (this.properties[0] == ParentExecAPI) {
+                (_a = this.properties[1].stdin) === null || _a === void 0 ? void 0 : _a.write(`sendResource:${Buffer.from(JSON.stringify({ name: name, value: value }), "utf8").toString("base64")}`);
+            }
+            if (this.properties[0] == ParentAPI) {
+                this.properties[1].send(["sendResource", Buffer.from(id, "utf8").toString("base64") + "/C/:VRTX:/C/" + Buffer.from(JSON.stringify(value), "utf8").toString("base64")]);
+            }
+        });
+    }
+}
+class VidriumQuestion {
+    constructor(content, properties) {
+        this.content = content;
+        this.properties = properties;
+    }
+    respond(response) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            if (this.properties[0] == ParentExecAPI) {
+                (_a = this.properties[1].stdin) === null || _a === void 0 ? void 0 : _a.write(`questionForwardResponse:${Buffer.from(JSON.stringify(response), "utf8").toString("base64")}`);
+            }
+            if (this.properties[0] == ParentAPI) {
+                this.properties[1].send(["questionForwardResponse", response]);
+            }
+        });
+    }
 }
 export default {
     version: "1.2.2",
